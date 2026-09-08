@@ -86,3 +86,5 @@ GitHub：<https://github.com/SWE-agent/mini-swe-agent/tree/main/src/minisweagent
 1. **agent = 一个 while 循环**：把 LLM 的回复当 bash 命令执行，结果贴回对话，再问一次。
 2. **一次恰好一条命令** —— 这是 agent 和脚本的分界线（走一步、看一眼、再决定）。
 3. **一切意外都翻译成对话** —— 格式错误、用户拒绝、命令失败，都变成一条"观察结果"喂回去，让模型自愈。
+
+自动提交测试 2026年 9月 8日 星期二 21时55分50秒 JST

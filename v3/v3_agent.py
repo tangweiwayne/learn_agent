@@ -164,8 +164,14 @@ def build_agent(*, mock=True, cwd=None, agent_class=Agent, **overrides):
 
 
 if __name__ == "__main__":
-    agent = build_agent(mock=True, cwd="/tmp")
-    agent.run("统计 /tmp 下有多少个 .py 文件")
+    # 造一个干净的临时目录，免得 mock 演示在 /tmp 里列出一堆系统垃圾
+    import tempfile
+    临时目录 = tempfile.mkdtemp(prefix="v3demo_")
+    for 名 in ["a.py", "b.py", "c.py", "note.txt"]:
+        open(os.path.join(临时目录, 名), "w").close()
+    agent = build_agent(mock=True, cwd=临时目录)
+    print(f"演示目录: {临时目录}\n")
+    agent.run("统计这个目录有多少个 .py 文件")
     print("\n" + "=" * 62)
     print(f"步数 {agent.step_count} | {agent.model.stats()} | 消息 {len(agent.messages)} 条")
     print("\n消息角色序列：")
