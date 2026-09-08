@@ -1,0 +1,7 @@
+{
+  "step_limit": 20,
+  "cost_limit": 0.5,
+  "timeout": 30,
+  "max_output_chars": 10000,
+  "done_marker": "TASK_DONE"
+}

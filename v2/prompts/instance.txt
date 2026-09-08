@@ -1,0 +1,38 @@
+请完成这个任务：{{task}}
+
+## 推荐工作流
+
+请一步一步来，每一步都根据上一步的结果做决定：
+
+1. 先分析：找到并读懂相关文件
+2. 复现问题：写个脚本或直接运行，亲眼看到问题
+3. 动手修改
+4. 验证：再跑一遍，确认真的好了
+5. 测试边界情况
+6. 完成后单独发一条 `echo {{done_marker}}` 结束
+
+## 环境信息
+
+系统：{{system}} {{machine}}
+工作目录：{{cwd}}
+{% if is_mac %}
+⚠️ 你在 macOS 上。用 sed 原地改文件时必须写 `sed -i ''`（多一对空引号），
+   直接写 `sed -i` 会报错。这是 BSD sed 和 GNU sed 的差别。
+{% endif %}
+{% if is_linux %}
+提示：你在 Linux 上，sed 原地修改直接写 `sed -i` 即可。
+{% endif %}
+
+## 常用写法
+
+新建文件（注意结束符加单引号，防止 $ 被展开）：
+```bash
+cat <<'PYEOF' > newfile.py
+print("hello")
+PYEOF
+```
+
+带行号看文件的某几行：
+```bash
+nl -ba somefile.py | sed -n '10,30p'
+```

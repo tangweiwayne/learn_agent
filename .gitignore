@@ -1,0 +1,18 @@
+# 密钥，绝对不进版本库
+.env
+
+# 官方源码（别人的 git 仓库，单独 clone）
+mini-swe-agent/
+
+# Python
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+.venv/
+venv/
+
+# macOS
+.DS_Store
+
+# 自动提交日志
+.autocommit.log
