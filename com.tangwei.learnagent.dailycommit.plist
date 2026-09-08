@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.tangwei.learnagent.dailycommit</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>--login</string>
+        <string>-c</string>
+        <string>$HOME/Documents/learn_agent/daily_commit.sh</string>
+    </array>
+
+    <!-- 每天 23:00 执行 -->
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Hour</key><integer>23</integer>
+        <key>Minute</key><integer>0</integer>
+    </dict>
+
+    <!-- 到点时电脑睡着了，醒来后补跑一次 -->
+    <key>RunAtLoad</key>
+    <false/>
+
+    <key>StandardOutPath</key>
+    <string>/tmp/learnagent_commit.out</string>
+    <key>StandardErrorPath</key>
+    <string>/tmp/learnagent_commit.err</string>
+</dict>
+</plist>
