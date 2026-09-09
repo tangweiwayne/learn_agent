@@ -55,7 +55,7 @@ def selftest():
 
 
 # ================================================================
-def run_one(task: dict, mock: bool) -> dict:
+def run_one(task: dict, mock: bool, outdir: str) -> dict:
     workdir = tempfile.mkdtemp(prefix=f"eval_{task['id']}_")
     state = task["setup"](workdir)
     agent = build_agent(mock=mock, cwd=workdir, agent_class=Agent,
@@ -74,7 +74,8 @@ def run_one(task: dict, mock: bool) -> dict:
     except Exception as e:
         ok, why = False, f"check 自己炸了：{type(e).__name__}: {e}"
 
-    trace = agent.save_trace()
+    # ★ 用任务名当文件名，不用时间戳 —— 同一秒跑完两个任务会互相覆盖
+    trace = agent.save_trace(os.path.join(outdir, f"{task['id']}.json"))
     shutil.rmtree(workdir, ignore_errors=True)
     return {
         "id": task["id"],
@@ -83,7 +84,7 @@ def run_one(task: dict, mock: bool) -> dict:
         "steps": agent.step_count,
         "cost": round(agent.model.total_cost, 4),
         "error": error,
-        "trace": os.path.basename(trace),
+        "trace": os.path.relpath(trace, HERE),
     }
 
 
@@ -96,11 +97,16 @@ def main():
     only = [a for a in args if not a.startswith("--")]
     tasks = [t for t in TASKS if not only or t["id"] in only]
 
-    print(f"\n跑 {len(tasks)} 个任务，模式：{'mock（预期全 fail）' if mock else 'DeepSeek 真跑'}\n")
+    stamp = datetime.datetime.now().strftime("%m%d_%H%M%S")
+    outdir = os.path.join(HERE, "results", stamp)
+    os.makedirs(outdir, exist_ok=True)
+
+    print(f"\n跑 {len(tasks)} 个任务，模式：{'mock（预期全 fail）' if mock else 'DeepSeek 真跑'}")
+    print(f"产物目录：{outdir}\n")
     results = []
     for t in tasks:
         print(f"  ▶ {t['id']} …", end="", flush=True)
-        r = run_one(t, mock)
+        r = run_one(t, mock, outdir)
         results.append(r)
         print(f" {'✅' if r['ok'] else '❌'}  {r['steps']} 步  ${r['cost']:.4f}")
 
@@ -116,12 +122,12 @@ def main():
           f"{sum(r['steps'] for r in results):>5}"
           f"{sum(r['cost'] for r in results):>10.4f}")
 
-    stamp = datetime.datetime.now().strftime("%m%d_%H%M%S")
-    out = os.path.join(HERE, "results", f"{stamp}.json")
+    out = os.path.join(outdir, "summary.json")
     with open(out, "w", encoding="utf-8") as f:
         json.dump({"when": stamp, "mock": mock, "results": results},
                   f, ensure_ascii=False, indent=2)
     print(f"\n成绩已存：{out}")
+    print(f"每个任务的完整 trace 在同一目录下，按任务名命名")
 
 
 if __name__ == "__main__":
