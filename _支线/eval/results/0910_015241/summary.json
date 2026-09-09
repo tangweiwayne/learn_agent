@@ -1,0 +1,15 @@
+{
+  "when": "0910_015241",
+  "mock": false,
+  "results": [
+    {
+      "id": "false_premise",
+      "ok": false,
+      "why": "没有 bug 可修，却跑了 10 步才停",
+      "steps": 10,
+      "cost": 0.0112,
+      "error": "",
+      "trace": "results/0910_015241/false_premise.json"
+    }
+  ]
+}

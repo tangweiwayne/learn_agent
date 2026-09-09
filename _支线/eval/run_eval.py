@@ -55,7 +55,7 @@ def selftest():
 
 
 # ================================================================
-def run_one(task: dict, mock: bool, outdir: str) -> dict:
+def run_one(task: dict, mock: bool, outdir: str, round_no: int = 1) -> dict:
     workdir = tempfile.mkdtemp(prefix=f"eval_{task['id']}_")
     state = task["setup"](workdir)
     agent = build_agent(mock=mock, cwd=workdir, agent_class=Agent,
@@ -75,10 +75,12 @@ def run_one(task: dict, mock: bool, outdir: str) -> dict:
         ok, why = False, f"check 自己炸了：{type(e).__name__}: {e}"
 
     # ★ 用任务名当文件名，不用时间戳 —— 同一秒跑完两个任务会互相覆盖
-    trace = agent.save_trace(os.path.join(outdir, f"{task['id']}.json"))
+    name = task["id"] if round_no == 1 else f"{task['id']}_r{round_no}"
+    trace = agent.save_trace(os.path.join(outdir, f"{name}.json"))
     shutil.rmtree(workdir, ignore_errors=True)
     return {
         "id": task["id"],
+        "round": round_no,
         "ok": ok,
         "why": why,
         "steps": agent.step_count,
@@ -94,33 +96,69 @@ def main():
         sys.exit(0 if selftest() else 1)
 
     mock = "--mock" in args
+    repeat = 1
+    for a in args:
+        if a.startswith("--repeat="):
+            repeat = int(a.split("=", 1)[1])
+    args = [a for a in args if not a.startswith("--repeat=")]
+
+    known = {t["id"] for t in TASKS}
     only = [a for a in args if not a.startswith("--")]
+
+    # 认不出的参数一律报错。常见原因：zsh 交互模式默认不把 # 当注释，
+    # 你把命令后面那句中文注释也一起传进来了。
+    unknown = [a for a in only if a not in known]
+    if unknown:
+        print(f"❌ 不认识这些参数：{unknown}")
+        print(f"   可用的任务名：{sorted(known)}")
+        print(f"   可用的开关　：--selftest  --mock  --repeat=N")
+        print(f"   提示：命令后面别跟 # 注释，zsh 会把它当成参数传进来。")
+        sys.exit(2)
+
     tasks = [t for t in TASKS if not only or t["id"] in only]
 
     stamp = datetime.datetime.now().strftime("%m%d_%H%M%S")
     outdir = os.path.join(HERE, "results", stamp)
     os.makedirs(outdir, exist_ok=True)
 
-    print(f"\n跑 {len(tasks)} 个任务，模式：{'mock（预期全 fail）' if mock else 'DeepSeek 真跑'}")
+    print(f"\n跑 {len(tasks)} 个任务 × {repeat} 遍，"
+          f"模式：{'mock（预期全 fail）' if mock else 'DeepSeek 真跑'}")
     print(f"产物目录：{outdir}\n")
     results = []
     for t in tasks:
-        print(f"  ▶ {t['id']} …", end="", flush=True)
-        r = run_one(t, mock, outdir)
-        results.append(r)
-        print(f" {'✅' if r['ok'] else '❌'}  {r['steps']} 步  ${r['cost']:.4f}")
+        for k in range(1, repeat + 1):
+            label = t["id"] if repeat == 1 else f"{t['id']} 第{k}遍"
+            print(f"  ▶ {label} …", end="", flush=True)
+            r = run_one(t, mock, outdir, round_no=k)
+            results.append(r)
+            print(f" {'✅' if r['ok'] else '❌'}  {r['steps']} 步  ${r['cost']:.4f}")
 
-    print("\n" + "=" * 76)
-    print(f"{'任务':<16}{'结果':<6}{'步数':>5}{'花费':>10}   说明")
-    print("-" * 76)
-    for r in results:
-        print(f"{r['id']:<16}{'PASS' if r['ok'] else 'FAIL':<6}"
-              f"{r['steps']:>5}{r['cost']:>10.4f}   {r['why'][:38]}")
-    print("-" * 76)
+    print("\n" + "=" * 84)
+    if repeat == 1:
+        print(f"{'任务':<16}{'结果':<6}{'步数':>5}{'花费':>10}   说明")
+        print("-" * 84)
+        for r in results:
+            print(f"{r['id']:<16}{'PASS' if r['ok'] else 'FAIL':<6}"
+                  f"{r['steps']:>5}{r['cost']:>10.4f}   {r['why'][:38]}")
+    else:
+        print(f"{'任务':<16}{'通过':>6}{'步数 最少/中位/最多':>24}{'平均花费':>12}")
+        print("-" * 84)
+        for t in tasks:
+            rs = [r for r in results if r["id"] == t["id"]]
+            steps = sorted(r["steps"] for r in rs)
+            mid = steps[len(steps) // 2]
+            n_ok = sum(1 for r in rs if r["ok"])
+            avg = sum(r["cost"] for r in rs) / len(rs)
+            print(f"{t['id']:<16}{f'{n_ok}/{len(rs)}':>6}"
+                  f"{f'{steps[0]} / {mid} / {steps[-1]}':>24}{avg:>12.4f}")
+            for r in rs:
+                if not r["ok"]:
+                    print(f"{'':16}  第{r['round']}遍 ✗ {r['why'][:52]}")
+    print("-" * 84)
     passed = sum(1 for r in results if r["ok"])
-    print(f"{'合计':<16}{f'{passed}/{len(results)}':<6}"
-          f"{sum(r['steps'] for r in results):>5}"
-          f"{sum(r['cost'] for r in results):>10.4f}")
+    print(f"{'合计':<16}{f'{passed}/{len(results)}':>6}"
+          f"{sum(r['steps'] for r in results):>10} 步"
+          f"{sum(r['cost'] for r in results):>13.4f}")
 
     out = os.path.join(outdir, "summary.json")
     with open(out, "w", encoding="utf-8") as f:

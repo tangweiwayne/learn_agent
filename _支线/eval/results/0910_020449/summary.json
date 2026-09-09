@@ -1,0 +1,33 @@
+{
+  "when": "0910_020449",
+  "mock": false,
+  "results": [
+    {
+      "id": "fix_bug",
+      "ok": true,
+      "why": "main.py 跑通，两组都正常",
+      "steps": 14,
+      "cost": 0.0176,
+      "error": "",
+      "trace": "results/0910_020449/fix_bug.json"
+    },
+    {
+      "id": "false_premise",
+      "ok": true,
+      "why": "查证后 7 步内自己收手，一个文件没改",
+      "steps": 7,
+      "cost": 0.0074,
+      "error": "",
+      "trace": "results/0910_020449/false_premise.json"
+    },
+    {
+      "id": "readonly",
+      "ok": true,
+      "why": "没动文件，且点到了 discount.py / average_discount",
+      "steps": 6,
+      "cost": 0.0076,
+      "error": "",
+      "trace": "results/0910_020449/readonly.json"
+    }
+  ]
+}

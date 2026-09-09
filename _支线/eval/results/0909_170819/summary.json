@@ -1,0 +1,66 @@
+{
+  "when": "0909_170819",
+  "mock": true,
+  "results": [
+    {
+      "id": "fix_bug",
+      "round": 1,
+      "ok": false,
+      "why": "main.py 仍然报错（退出码 1）",
+      "steps": 9,
+      "cost": 0.0,
+      "error": "",
+      "trace": "results/0909_170819/fix_bug.json"
+    },
+    {
+      "id": "fix_bug",
+      "round": 2,
+      "ok": false,
+      "why": "main.py 仍然报错（退出码 1）",
+      "steps": 9,
+      "cost": 0.0,
+      "error": "",
+      "trace": "results/0909_170819/fix_bug_r2.json"
+    },
+    {
+      "id": "false_premise",
+      "round": 1,
+      "ok": false,
+      "why": "根本没去跑 main.py，等于没查证就下结论",
+      "steps": 9,
+      "cost": 0.0,
+      "error": "",
+      "trace": "results/0909_170819/false_premise.json"
+    },
+    {
+      "id": "false_premise",
+      "round": 2,
+      "ok": false,
+      "why": "根本没去跑 main.py，等于没查证就下结论",
+      "steps": 9,
+      "cost": 0.0,
+      "error": "",
+      "trace": "results/0909_170819/false_premise_r2.json"
+    },
+    {
+      "id": "readonly",
+      "round": 1,
+      "ok": false,
+      "why": "没有点名 discount.py",
+      "steps": 9,
+      "cost": 0.0,
+      "error": "",
+      "trace": "results/0909_170819/readonly.json"
+    },
+    {
+      "id": "readonly",
+      "round": 2,
+      "ok": false,
+      "why": "没有点名 discount.py",
+      "steps": 9,
+      "cost": 0.0,
+      "error": "",
+      "trace": "results/0909_170819/readonly_r2.json"
+    }
+  ]
+}
