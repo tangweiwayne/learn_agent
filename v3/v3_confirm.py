@@ -27,7 +27,8 @@ class ConfirmAgent(Agent):
         super().__init__(*args, **kwargs)
         self.mode = mode
         self.whitelist = SAFE_PATTERNS if whitelist is None else whitelist
-        self.ask = ask
+        self.ask = ask             # 每次工具调用的确认闸门
+        self.ask_human = ask       # 被 Ctrl-C 打断时问话，用同一个函数
         self.rejected = 0
 
     # ---------- 只对 bash 做白名单判断 ----------
@@ -41,8 +42,22 @@ class ConfirmAgent(Agent):
             any(re.search(p, seg) for p in self.whitelist) for seg in segments
         )
 
+    def subagent_kwargs(self) -> dict:
+        """把确认闸门传给子助手 —— 否则子助手的 bash 一路畅通无阻。"""
+        return {"mode": self.mode, "whitelist": self.whitelist, "ask": self.ask}
+
     # ---------- 把一次工具调用描述给人看 ----------
     def describe_call(self, tool_name: str, args: dict) -> str:
+        if tool_name == "update_plan":
+            from v3_tools import normalize_plan
+            plan = normalize_plan(args.get("steps") or [])
+            done = sum(1 for it in plan if it["status"] == "done")
+            MARK = {"done": "[x]", "doing": "[>]", "todo": "[ ]"}
+            return f"计划（已完成 {done}/{len(plan)}）：\n" + "\n".join(
+                f"    {MARK.get(it['status'], '[ ]')} {i}. {it['text']}"
+                for i, it in enumerate(plan, 1))
+        if tool_name == "task":
+            return f"派子助手去查：\033[1m{args.get('prompt', '')}\033[0m"
         if tool_name == "bash":
             return f"\033[1m{args.get('command', '')}\033[0m"
         if tool_name == "edit_file":
@@ -104,7 +119,7 @@ if __name__ == "__main__":
     print("=" * 66)
     print("=== 完整流程（假answer：y, n, y, y, y）===")
     print("=" * 66)
-    answer = iter(["y", "n", "y", "y", "y", "y"])
+    answer = iter(["y"] * 20)
 
     def fake_ask(prompt):
         a = next(answer)
@@ -116,5 +131,5 @@ if __name__ == "__main__":
     agent.whitelist = []          # 清空白名单，让每次都要确认
     agent.run("给 demo.py 的 div 加除零检查")
     print(f"\n  被拒绝了 {agent.rejected} 次")
-    print("\n  最终文件content：")
+    print("\n  最终文件内容：")
     print("  " + open(os.path.join(tmpdir, "demo.py"), encoding="utf-8").read().replace("\n", "\n  "))

@@ -2,6 +2,10 @@
   "step_limit": 20,
   "cost_limit": 0.5,
   "timeout": 30,
-  "max_output_chars": 10000,
-  "done_marker": "TASK_DONE"
+  "max_output_chars": 4000,
+  "done_marker": "TASK_DONE",
+  "compact_keep_steps": 3,
+  "compact_min_chars": 800,
+  "subagent_step_limit": 8,
+  "stream": false
 }
