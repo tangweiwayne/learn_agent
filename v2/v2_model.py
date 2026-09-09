@@ -94,7 +94,10 @@ class DeepSeekModel(Model):
     def _generate(self, messages: list):
         url = self.env["DEEPSEEK_BASE_URL"].rstrip("/") + "/chat/completions"
         payload = json.dumps(
-            {"model": self.model_name, "messages": messages}
+            {   
+                "model": self.model_name, 
+                "messages": messages
+            }
         ).encode("utf-8")
         req = urllib.request.Request(
             url,

@@ -24,7 +24,9 @@ if __name__ == "__main__":
 
     print(f"\n[v3 工具调用版] 模式: {'mock' if mock else 'DeepSeek'} / {'yolo' if yolo else 'confirm'}")
     print(f"目录: {agent.env.cwd}")
-    print(f"上限: {agent.step_limit} 步, ${agent.model.cost_limit}\n")
+    print(f"上限: {agent.step_limit} 步, ${agent.model.cost_limit}")
+    # 把工具清单打出来 —— 这样"工具没发过去"这类 bug 一眼就能看见
+    print(f"工具: {[t['function']['name'] for t in agent.model.tools]}\n")
 
     try:
         agent.run(任务)
@@ -33,7 +35,9 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         print("\n\n已中断")
 
+    trace = agent.save_trace()
     print(f"\n{'=' * 50}")
     print(f"步数 {agent.step_count} | {agent.model.stats()} | 消息 {len(agent.messages)} 条")
+    print(f"轨迹已存：{trace}")
     if isinstance(agent, ConfirmAgent):
         print(f"你拒绝了 {agent.rejected} 条命令")

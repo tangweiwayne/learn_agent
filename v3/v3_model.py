@@ -1,44 +1,21 @@
 """
-v3 · 改动 1：用【工具调用】替代正则解析
+v3 · Model：工具call版
 
 和 v2 的差别：
-  · 请求里多带一个 tools=[BASH_TOOL]，告诉 API "有个叫 bash 的工具"
+  · 请求里多带一个 tools=[...]，告诉 API 有哪些工具
   · 模型返回的不再是一坨文字，而是结构化的 tool_calls
   · query() 返回【整条 assistant 消息】，不再是字符串
-  · 不再需要 parse_action() 和正则
+
+工具的定义在 v3_tools.py 里，这个文件只负责"发请求 + 算钱"。
 """
 
 import json
 import os
 import urllib.request
 
+from v3_tools import ALL_TOOLS
+
 HERE = os.path.dirname(os.path.abspath(__file__))
-
-
-# ==================================================================
-# 工具定义：告诉 API "我有一个叫 bash 的工具，长这样"
-# 这是 OpenAI 定的标准格式，DeepSeek / Claude / Gemini 都兼容
-# ==================================================================
-BASH_TOOL = {
-    "type": "function",
-    "function": {
-        "name": "bash",
-        "description": (
-            "在用户的电脑上执行一条 bash 命令，返回它的标准输出和错误输出。"
-            "每条命令都在新的子进程里执行，cd 和环境变量不会保留到下一条。"
-        ),
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "command": {
-                    "type": "string",
-                    "description": "要执行的完整 bash 命令，可以是多行",
-                }
-            },
-            "required": ["command"],
-        },
-    },
-}
 
 
 def _find_env_file() -> str:
@@ -76,10 +53,9 @@ API_FIELDS = {"role", "content", "tool_calls", "tool_call_id", "name"}
 def for_api(messages: list) -> list:
     """把内部消息清洗成 API 能接受的样子。
 
-    为什么需要：
-      1. 我们会往消息里塞自己的字段（比如 extra），API 不认识
-      2. DeepSeek 会返回 reasoning_content 等额外字段，原样发回去可能报错
-      3. content 为 None 时有些 API 会拒绝，统一换成空字符串
+    1. 我们会往消息里塞自己的字段（比如 extra），API 不认识
+    2. 模型可能返回 reasoning_content 等额外字段，原样发回去可能报错
+    3. content 为 None 时有些 API 会拒绝，统一换成空字符串
     """
     out = []
     for m in messages:
@@ -91,17 +67,16 @@ def for_api(messages: list) -> list:
 
 
 # ==================================================================
-# 父类：管状态（和 v2 一样），但 query 返回的是【一条消息】
+# 父类：管状态。query() 返回一条【消息字典】
 # ==================================================================
 class Model:
     def __init__(self, cost_limit: float = 0.5, tools: list = None):
         self.n_calls = 0
         self.total_cost = 0.0
         self.cost_limit = cost_limit
-        self.tools = tools if tools is not None else [BASH_TOOL]
+        self.tools = tools if tools is not None else ALL_TOOLS
 
     def query(self, messages: list) -> dict:
-        """返回一条 assistant 消息（dict），里面可能带 tool_calls。"""
         if 0 < self.cost_limit <= self.total_cost:
             raise BudgetExceeded(
                 f"预算用尽：已花 ${self.total_cost:.4f}，上限 ${self.cost_limit:.4f}"
@@ -133,13 +108,11 @@ class DeepSeekModel(Model):
 
     def _generate(self, messages: list):
         url = self.env["DEEPSEEK_BASE_URL"].rstrip("/") + "/chat/completions"
-        payload = json.dumps(
-            {
-                "model": self.model_name,
-                "messages": for_api(messages),
-                "tools": self.tools,          # ← 这是 v3 的核心新增
-            }
-        ).encode("utf-8")
+        payload = json.dumps({
+            "model": self.model_name,
+            "messages": for_api(messages),
+            "tools": self.tools,
+        }).encode("utf-8")
         req = urllib.request.Request(
             url,
             data=payload,
@@ -153,7 +126,7 @@ class DeepSeekModel(Model):
             data = json.loads(resp.read().decode("utf-8"))
 
         choice = data["choices"][0]
-        message = choice["message"]           # 已经是标准格式，含 tool_calls
+        message = choice["message"]
         message.setdefault("content", "")
         message["extra"] = {"finish_reason": choice.get("finish_reason")}
 
@@ -164,23 +137,35 @@ class DeepSeekModel(Model):
 
 
 # ==================================================================
-# 子类 2：假模型 —— 现在要伪造 tool_calls 格式
+# 子类 2：假模型 —— 伪造和真 API 一模一样的 tool_calls
 # ==================================================================
-def 造一条工具调用(command: str, 序号: int) -> dict:
-    """手工拼一个和真 API 返回一模一样的 tool_call。"""
+def make_tool_call(tool_name: str, args: dict, seq: int) -> dict:
     return {
-        "id": f"call_mock_{序号}",
+        "id": f"call_mock_{seq}",
         "type": "function",
-        "function": {"name": "bash", "arguments": json.dumps({"command": command})},
+        "function": {"name": tool_name, "arguments": json.dumps(args, ensure_ascii=False)},
     }
 
 
-# 台词格式：(思考文字, 命令 或 None)   None 表示"这次故意不调用工具"
+# 台词格式：(thought文字, (tool_name, args字典) 或 None)
 DEFAULT_SCRIPT = [
-    ("我先看看当前目录里有什么文件。", "ls"),
-    ("有几个文件，数一下 .py 的数量。", "ls *.py | wc -l"),
+    ("我先看看有什么文件。", ("bash", {"command": "ls"})),
+    ("看一下 demo.py 的内容。", ("bash", {"command": "nl -ba demo.py"})),
+    ("给 div 加上除零检查 —— 用 edit_file，不重写整个文件。",
+     ("edit_file", {"path": "demo.py",
+                    "old": "    return a / b",
+                    "new": '    if b == 0:\n        raise ValueError("除数不能为0")\n    return a / b'})),
+    ("再跑一遍验证。", ("bash", {"command": "python3 demo.py"})),
     ("（故意演示：这次不调用任何工具）", None),
-    ("抱歉，数完了，任务完成。", "echo TASK_DONE"),
+    ("好了，任务完成。", ("bash", {"command": "echo TASK_DONE"})),
+    # ↓ 上面那句会触发"完成前自检"，所以还要再准备一轮
+    ("自检：\n"
+     "1. 任务要求：给 demo.py 的 div 加除零检查\n"
+     "2. 做到了 —— 第 3 步用 edit_file 加了 if b == 0 raise ValueError，"
+     "第 4 步运行验证通过\n"
+     "3. 没有做任务之外的改动\n"
+     "4. 结论：可以结束",
+     ("bash", {"command": "echo TASK_DONE"})),
 ]
 
 
@@ -193,43 +178,28 @@ class MockModel(Model):
     def _generate(self, messages: list):
         if self.i >= len(self.scripted):
             raise IndexError(f"台词用完了（共 {len(self.scripted)} 句）")
-        思考, 命令 = self.scripted[self.i]
+        thought, call = self.scripted[self.i]
         self.i += 1
-        message = {"role": "assistant", "content": 思考}
-        if 命令 is not None:
-            message["tool_calls"] = [造一条工具调用(命令, self.i)]
+        message = {"role": "assistant", "content": thought, "extra": {}}
+        if call is not None:
+            tool_name, args = call
+            message["tool_calls"] = [make_tool_call(tool_name, args, self.i)]
         return message, 0.0
 
 
-# ------------------------------------------------------------------
+# ==================================================================
 if __name__ == "__main__":
-    print("=" * 66)
-    print("=== 1. MockModel 返回的消息长什么样 ===")
+    print("=== 默认带哪些工具 ===")
+    for cls in (DeepSeekModel, MockModel):
+        m = cls()
+        print(f"   {cls.__name__:15s} -> {[t['function']['name'] for t in m.tools]}")
+
+    print("\n=== MockModel 能造两种工具call ===")
     m = MockModel()
-    msg = m.query([])
-    print(json.dumps(msg, ensure_ascii=False, indent=2))
-
-    print("\n=== 2. 怎么从里面取出命令 ===")
-    tc = msg["tool_calls"][0]
-    args = json.loads(tc["function"]["arguments"])
-    print(f"   tool_call id  = {tc['id']}")
-    print(f"   工具名        = {tc['function']['name']}")
-    print(f"   arguments     = {tc['function']['arguments']!r}   ← 是个 JSON 字符串")
-    print(f"   json.loads 后 = {args}")
-    print(f"   命令          = {args['command']!r}")
-
-    print("\n=== 3. 第 3 句台词故意不带工具调用 ===")
-    m.query([])                                    # 第 2 句
-    msg3 = m.query([])                             # 第 3 句
-    print(f"   content    = {msg3['content']!r}")
-    print(f"   有 tool_calls 吗 = {'tool_calls' in msg3}   ← 没有，agent 要处理这种情况")
-
-    print("\n=== 4. for_api() 清洗字段 ===")
-    脏消息 = [
-        {"role": "assistant", "content": None, "tool_calls": [tc],
-         "reasoning_content": "这是 DeepSeek 多给的字段", "extra": {"我的": "私货"}},
-        {"role": "tool", "tool_call_id": "call_x", "content": "输出"},
-    ]
-    print("   清洗前的键：", [sorted(d) for d in 脏消息])
-    print("   清洗后的键：", [sorted(d) for d in for_api(脏消息)])
-    print("   content=None 被换成了:", repr(for_api(脏消息)[0]["content"]))
+    for _ in range(4):
+        msg = m.query([])
+        tc = (msg.get("tool_calls") or [None])[0]
+        if tc:
+            print(f"\n   content = {msg['content']}")
+            print(f"   tool_name  = {tc['function']['name']}")
+            print(f"   args    = {tc['function']['arguments']}")
