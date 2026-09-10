@@ -16,6 +16,8 @@ def discount_amount(item):
 def average_discount(cart):
     """打折商品的【平均】优惠金额，用来在结算页展示。"""
     applicable = applicable_items(cart)
+    if not applicable:
+        return 0.0
     total = sum(discount_amount(it) for it in applicable)
     return total / len(applicable)
 
